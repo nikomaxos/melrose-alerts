@@ -1,27 +1,25 @@
 version: '3.8'
-
 services:
   melrose-alerts:
     build: .
     container_name: melrose-alerts
     restart: unless-stopped
     ports:
-      - "3000:3000"
+    - 3000:3000
     volumes:
-      - ./config.yaml:/usr/src/app/config.yaml
-
+    - ./config.yaml:/usr/src/app/config.yaml
+    - ./alerts_history.json:/usr/src/app/alerts_history.json
   caddy:
     image: caddy:latest
     container_name: caddy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+    - 80:80
+    - 443:443
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-
+    - ./Caddyfile:/etc/caddy/Caddyfile
+    - caddy_data:/data
+    - caddy_config:/config
 volumes:
-  caddy_data:
-  caddy_config:
+  caddy_data: null
+  caddy_config: null

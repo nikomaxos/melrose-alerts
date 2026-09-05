@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melrose Alerts History</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { margin-top: 0; color: #333; display: flex; justify-content: space-between; align-items: center;}
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: 600; color: #555; }
+        tr:hover { background-color: #f1f3f5; }
+        .btn { background-color: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 14px; font-weight: 600; }
+        .btn:hover { background-color: #0056b3; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover { background-color: #5a6268; }
+        .empty-msg { text-align: center; color: #777; padding: 30px; font-style: italic; }
+        .stats-badge { background: #e9ecef; color: #495057; padding: 3px 6px; border-radius: 4px; font-size: 0.85em; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>
+        Alerts History
+        <a href="/" class="btn btn-secondary">← Back to Settings</a>
+    </h2>
+    
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <p style="margin: 0; color: #666;">Showing the most recent alerts sent by the system.</p>
+            <button onclick="loadHistory()" class="btn">↻ Refresh</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Destination Number</th>
+                    <th>Trigger Reason</th>
+                    <th>Raw Stats</th>
+                </tr>
+            </thead>
+            <tbody id="historyTableBody">
+                <tr>
+                    <td colspan="4" class="empty-msg">Loading history...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function formatDate(isoString) {
+        const d = new Date(isoString);
+        return d.toLocaleString('el-GR', { 
+            day: '2-digit', month: '2-digit', year: 'numeric', 
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    }
+
+    async function loadHistory() {
+        try {
+            const res = await fetch('/api/history');
+            const data = await res.json();
+            const tbody = document.getElementById('historyTableBody');
+            
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">No alerts have been sent yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            data.forEach(alert => {
+                const statsStr = alert.stats ? JSON.stringify(alert.stats).replace(/"/g, '&quot;') : 'N/A';
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="white-space: nowrap;">${formatDate(alert.timestamp)}</td>
+                    <td><strong>${alert.destination_number}</strong></td>
+                    <td style="color: #dc3545;">${alert.reason}</td>
+                    <td><span class="stats-badge" title="${statsStr}">${alert.stats ? 'Hover to view' : 'N/A'}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (err) {
+            console.error('Failed to load history:', err);
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-msg" style="color: red;">Error loading history.</td></tr>';
+        }
+    }
+
+    // Load immediately on page load
+    loadHistory();
+</script>
+
+</body>
+</html>

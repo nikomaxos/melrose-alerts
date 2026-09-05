@@ -27,6 +27,45 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+
+const HISTORY_FILE = './alerts_history.json';
+if (!fs.existsSync(HISTORY_FILE)) {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify([]));
+}
+
+function logAlertHistory(dest, reason, stats) {
+    try {
+        const history = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+        history.unshift({
+            timestamp: new Date().toISOString(),
+            destination_number: dest,
+            reason: reason,
+            stats: stats
+        });
+        
+        // Keep only last 1000 alerts
+        if (history.length > 1000) {
+            history.length = 1000;
+        }
+        
+        fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+    } catch (e) {
+        console.error("Failed to write to alert history:", e);
+    }
+}
+
+app.get('/api/history', (req, res) => {
+    try {
+        if (!fs.existsSync(HISTORY_FILE)) {
+            return res.json([]);
+        }
+        const history = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+        res.json(history);
+    } catch (e) {
+        res.status(500).json({ error: "Failed to read history" });
+    }
+});
+
 app.get('/api/config', (req, res) => {
   res.json(config);
 });
@@ -77,7 +116,7 @@ async function fetchMelroseStats() {
   }
 }
 
-async function sendAlert(profile, reason) {
+async function sendAlert(profile, reason, stats) {
   const dest = profile.destination_number;
   const now = Date.now();
   const lastAlert = state.lastAlertTime[dest] || 0;
@@ -89,6 +128,7 @@ async function sendAlert(profile, reason) {
       await smppClient.sendSMS(dest, `URGENT (Melrose): ${reason}`);
       state.lastAlertTime[dest] = now;
       console.log(`[${dest}] Alert sent successfully.`);
+      logAlertHistory(dest, reason, stats);
     } catch (error) {
       console.error(`[${dest}] Failed to send SMS alert:`, error.message);
     }
@@ -115,7 +155,7 @@ async function checkAndAlert(stats) {
 
     // Condition 1: Delivery Rate
     if (deliveryRate !== undefined && deliveryRate < profile.delivery_rate_threshold_percent) {
-      await sendAlert(profile, `Delivery rate dropped to ${deliveryRate}%`);
+      await sendAlert(profile, `Delivery rate dropped to ${deliveryRate}%`, stats);
     }
 
     // Condition 2: Pending Messages
@@ -127,7 +167,7 @@ async function checkAndAlert(stats) {
       
       const exceededDurationSecs = (Date.now() - state.pendingExceededSince[dest]) / 1000;
       if (exceededDurationSecs >= profile.pending_messages_duration_seconds) {
-        await sendAlert(profile, `Pending messages (${pendingMessages}) exceeded threshold for > ${profile.pending_messages_duration_seconds}s`);
+        await sendAlert(profile, `Pending messages (${pendingMessages}) exceeded threshold for > ${profile.pending_messages_duration_seconds}s`, stats);
       }
     } else {
       // Reset if it drops below threshold
