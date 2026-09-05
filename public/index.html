@@ -167,6 +167,27 @@
         renderProfiles();
     }
 
+    
+    async function testAlert(destination) {
+        if (!confirm(`Are you sure you want to send a test alert to ${destination}?`)) return;
+        
+        try {
+            const res = await fetch('/api/test-alert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ destination })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert("Test alert sent successfully! Check your phone and the History page.");
+            } else {
+                alert("Failed to send test alert: " + data.error);
+            }
+        } catch (e) {
+            alert("Error triggering test alert.");
+        }
+    }
+
     function removeProfile(index) {
         globalConfig.profiles.splice(index, 1);
         renderProfiles();
