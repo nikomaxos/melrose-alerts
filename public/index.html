@@ -124,7 +124,10 @@
             <div class="form-row">
                 <div class="form-group" style="flex: 2">
                     <label>Destination Mobile Number</label>
-                    <input type="text" id="dest_${index}" value="${p.destination_number || ''}" required placeholder="3069...">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="dest_${index}" value="${p.destination_number || ''}" required placeholder="3069..." style="flex: 1;">
+                        <button type="button" class="btn btn-secondary" onclick="testAlert(document.getElementById('dest_${index}').value)">🔔 Test Alert</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Alert Cooldown (Mins)</label>
