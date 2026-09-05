@@ -140,6 +140,9 @@ app.post('/api/config', (req, res) => {
     // Merge updates
     config.smpp = newConfig.smpp;
     config.profiles = newConfig.profiles || [];
+    if (newConfig.melrose) {
+        config.melrose = newConfig.melrose;
+    }
 
     // Save to file
     fs.writeFileSync('./config.yaml', YAML.stringify(config), 'utf8');
