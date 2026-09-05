@@ -6,9 +6,13 @@ const SmppClient = require('./smppClient');
 let config = YAML.parse(fs.readFileSync('./config.yaml', 'utf8'));
 let smppClient = new SmppClient(config.smpp);
 
-// State tracking
-let lastAlertTime = 0;
-let pendingExceededSince = null;
+// State tracking per profile destination number
+// lastAlertTime[dest] = Date.now()
+// pendingExceededSince[dest] = Date.now()
+let state = {
+  lastAlertTime: {},
+  pendingExceededSince: {}
+};
 
 // UI Server setup
 const app = express();
@@ -23,19 +27,23 @@ app.post('/api/config', (req, res) => {
   try {
     const newConfig = req.body;
     
+    const smppChanged = JSON.stringify(config.smpp) !== JSON.stringify(newConfig.smpp);
+
     // Merge updates
-    config.smpp.destination_number = newConfig.destination_number;
-    config.alerting.delivery_rate_threshold_percent = Number(newConfig.delivery_rate_threshold_percent);
-    config.alerting.pending_messages_threshold = Number(newConfig.pending_messages_threshold);
-    config.alerting.pending_messages_duration_seconds = Number(newConfig.pending_messages_duration_seconds);
+    config.smpp = newConfig.smpp;
+    config.profiles = newConfig.profiles || [];
 
     // Save to file
     fs.writeFileSync('./config.yaml', YAML.stringify(config), 'utf8');
-
-    // Update SMPP client if needed (though it might require reconnect for changes to host/port, we just update the destination here which is used dynamically per SMS)
-    smppClient.config = config.smpp;
-
     console.log('Configuration updated successfully via UI');
+
+    // Reconnect SMPP if global settings changed
+    if (smppChanged) {
+      console.log('SMPP settings changed, reconnecting...');
+      smppClient.config = config.smpp;
+      smppClient.connect().catch(e => console.error('Reconnect failed:', e.message));
+    }
+
     res.json({ success: true, config });
   } catch (err) {
     console.error('Failed to update config:', err);
@@ -60,21 +68,23 @@ async function fetchMelroseStats() {
   }
 }
 
-async function sendAlert(reason) {
+async function sendAlert(profile, reason) {
+  const dest = profile.destination_number;
   const now = Date.now();
-  const cooldownMs = config.alerting.alert_cooldown_minutes * 60 * 1000;
+  const lastAlert = state.lastAlertTime[dest] || 0;
+  const cooldownMs = profile.alert_cooldown_minutes * 60 * 1000;
 
-  if (now - lastAlertTime > cooldownMs) {
-    console.log(`Sending alert: ${reason}`);
+  if (now - lastAlert > cooldownMs) {
+    console.log(`[${dest}] Sending alert: ${reason}`);
     try {
-      await smppClient.sendSMS(`URGENT (Melrose): ${reason}`);
-      lastAlertTime = now;
-      console.log('Alert sent successfully.');
+      await smppClient.sendSMS(dest, `URGENT (Melrose): ${reason}`);
+      state.lastAlertTime[dest] = now;
+      console.log(`[${dest}] Alert sent successfully.`);
     } catch (error) {
-      console.error('Failed to send SMS alert:', error);
+      console.error(`[${dest}] Failed to send SMS alert:`, error.message);
     }
   } else {
-    console.log(`Alert condition met (${reason}), but in cooldown mode.`);
+    console.log(`[${dest}] Alert condition met (${reason}), but in cooldown mode.`);
   }
 }
 
@@ -84,25 +94,30 @@ async function checkAndAlert(stats) {
 
   console.log(`Stats - Delivery Rate: ${deliveryRate}%, Pending: ${pendingMessages}`);
 
-  // Condition 1: Delivery Rate
-  if (deliveryRate !== undefined && deliveryRate < config.alerting.delivery_rate_threshold_percent) {
-    await sendAlert(`Delivery rate dropped to ${deliveryRate}%`);
-  }
+  for (const profile of config.profiles) {
+    const dest = profile.destination_number;
+    if (!dest) continue;
 
-  // Condition 2: Pending Messages
-  const pendingThreshold = config.alerting.pending_messages_threshold;
-  if (pendingMessages > pendingThreshold) {
-    if (!pendingExceededSince) {
-      pendingExceededSince = Date.now();
+    // Condition 1: Delivery Rate
+    if (deliveryRate !== undefined && deliveryRate < profile.delivery_rate_threshold_percent) {
+      await sendAlert(profile, `Delivery rate dropped to ${deliveryRate}%`);
     }
-    
-    const exceededDurationSecs = (Date.now() - pendingExceededSince) / 1000;
-    if (exceededDurationSecs >= config.alerting.pending_messages_duration_seconds) {
-      await sendAlert(`Pending messages (${pendingMessages}) exceeded threshold for > ${config.alerting.pending_messages_duration_seconds}s`);
+
+    // Condition 2: Pending Messages
+    const pendingThreshold = profile.pending_messages_threshold;
+    if (pendingMessages > pendingThreshold) {
+      if (!state.pendingExceededSince[dest]) {
+        state.pendingExceededSince[dest] = Date.now();
+      }
+      
+      const exceededDurationSecs = (Date.now() - state.pendingExceededSince[dest]) / 1000;
+      if (exceededDurationSecs >= profile.pending_messages_duration_seconds) {
+        await sendAlert(profile, `Pending messages (${pendingMessages}) exceeded threshold for > ${profile.pending_messages_duration_seconds}s`);
+      }
+    } else {
+      // Reset if it drops below threshold
+      state.pendingExceededSince[dest] = null;
     }
-  } else {
-    // Reset if it drops below threshold
-    pendingExceededSince = null;
   }
 }
 
@@ -111,7 +126,7 @@ async function startPoller() {
   try {
     await smppClient.connect();
   } catch (error) {
-    console.error('Failed to connect to SMPP provider at startup:', error);
+    console.error('Failed to connect to SMPP provider at startup:', error.message);
   }
 
   const intervalMs = config.melrose.polling_interval_seconds * 1000;
@@ -122,7 +137,7 @@ async function startPoller() {
 }
 
 // Start HTTP server
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`UI Server listening on http://localhost:${PORT}`);
 });

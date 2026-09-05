@@ -1,0 +1,3 @@
+melrose-alerts.globalnetservices.net {
+    reverse_proxy melrose-alerts:3000
+}

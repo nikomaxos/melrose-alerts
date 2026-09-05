@@ -5,6 +5,8 @@ services:
     build: .
     container_name: melrose-alerts
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     volumes:
       - ./config.yaml:/usr/src/app/config.yaml
 

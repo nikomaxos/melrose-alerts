@@ -1,0 +1,106 @@
+global
+        log /dev/log    local0
+        log /dev/log    local1 notice
+        chroot /var/lib/haproxy
+        stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+        stats timeout 30s
+        user haproxy
+        group haproxy
+        daemon
+
+defaults
+        log     global
+        option  dontlognull
+        timeout connect 5000
+        timeout client  50000
+        timeout server  50000
+
+frontend http_front
+        bind *:80
+        mode http
+        acl is_staging hdr_end(host) -i staging-messaging-agent.globalnetservices.net
+        acl is_prod hdr_end(host) -i messaging-agent.globalnetservices.net
+        acl is_smpp hdr_end(host) -i smpp.globalnetservices.net
+        
+        acl is_melrose_alerts hdr_end(host) -i melrose-alerts.globalnetservices.net
+        use_backend melrose_alerts_http if is_melrose_alerts
+        use_backend staging_http if is_staging
+        use_backend prod_http if is_prod
+        use_backend smpp_proxy_http if is_smpp
+        
+        # Default fallback to DevBox just in case
+        default_backend staging_http
+
+frontend https_front
+        bind *:443
+        mode tcp
+        tcp-request inspect-delay 5s
+        tcp-request content accept if { req_ssl_hello_type 1 }
+        
+        acl is_staging req_ssl_sni -i staging-messaging-agent.globalnetservices.net
+        acl is_prod req_ssl_sni -i messaging-agent.globalnetservices.net
+        acl is_smpp hdr_end(host) -i smpp.globalnetservices.net
+        
+        acl is_melrose_alerts req_ssl_sni -i melrose-alerts.globalnetservices.net
+        use_backend melrose_alerts_https if is_melrose_alerts
+        use_backend staging_https if is_staging
+        use_backend prod_https if is_prod
+        use_backend smpp_proxy_http if is_smpp
+        
+        # Default fallback
+        default_backend staging_https
+
+backend staging_http
+        mode http
+        server staging 10.10.10.96:80
+
+backend prod_http
+        mode http
+        server prod 10.10.10.193:80
+
+backend staging_https
+        mode tcp
+        server staging 10.10.10.96:443
+
+backend prod_https
+        mode tcp
+        server prod 10.10.10.193:443
+
+frontend smpp_proxy_tcp
+        bind *:2775
+        mode tcp
+        default_backend smpp_proxy_tcp_backend
+
+frontend smpp_proxy_tls
+        bind *:2776
+        mode tcp
+        default_backend smpp_proxy_tls_backend
+
+frontend smpp_proxy_ui
+        bind *:8085
+        mode http
+        default_backend smpp_proxy_ui_backend
+
+backend smpp_proxy_tcp_backend
+        mode tcp
+        server proxy 10.10.10.105:2775
+
+backend smpp_proxy_tls_backend
+        mode tcp
+        server proxy 10.10.10.105:2776
+
+backend smpp_proxy_ui_backend
+        mode http
+        server proxy 10.10.10.105:8085
+
+backend smpp_proxy_http
+        mode http
+        server proxy 10.10.10.105:80
+
+backend melrose_alerts_http
+        mode http
+        server melrose 10.10.10.110:80
+
+backend melrose_alerts_https
+        mode tcp
+        server melrose 10.10.10.110:443

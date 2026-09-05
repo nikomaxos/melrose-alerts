@@ -9,12 +9,15 @@ class SmppClient {
 
   connect() {
     return new Promise((resolve, reject) => {
+      this.disconnect(); // Ensure any existing session is closed
+
+      console.log(`Connecting to SMPP server at ${this.config.host}:${this.config.port}...`);
       this.session = smpp.connect({
         url: `smpp://${this.config.host}:${this.config.port}`,
         auto_enquire_link_period: 10000,
         debug: true
       }, () => {
-        console.log('Connected to SMPP server');
+        console.log('Connected to SMPP server socket. Binding...');
         this.session.bind_transceiver({
           system_id: this.config.username,
           password: this.config.password,
@@ -24,25 +27,42 @@ class SmppClient {
             this.connected = true;
             resolve();
           } else {
-            reject(new Error(`Failed to bind. Status: ${pdu.command_status}`));
+            const err = new Error(`Failed to bind. Status: ${pdu.command_status}`);
+            console.error(err.message);
+            reject(err);
           }
         });
       });
 
       this.session.on('error', (error) => {
-        console.error('SMPP Session error:', error);
+        console.error('SMPP Session error:', error.message);
         this.connected = false;
       });
 
       this.session.on('close', () => {
         console.log('SMPP Session closed');
         this.connected = false;
-        // Optionally implement auto-reconnect here
       });
     });
   }
 
-  sendSMS(message) {
+  disconnect() {
+    if (this.session) {
+      console.log('Closing existing SMPP session...');
+      try {
+        if (this.connected) {
+          this.session.unbind();
+        }
+        this.session.close();
+      } catch (err) {
+        console.error('Error during disconnect:', err.message);
+      }
+      this.session = null;
+      this.connected = false;
+    }
+  }
+
+  sendSMS(destination, message) {
     return new Promise((resolve, reject) => {
       if (!this.connected || !this.session) {
         return reject(new Error('SMPP Client not connected'));
@@ -50,14 +70,14 @@ class SmppClient {
 
       this.session.submit_sm({
         source_addr: this.config.source_address,
-        destination_addr: this.config.destination_number,
+        destination_addr: destination,
         short_message: message,
       }, (pdu) => {
         if (pdu.command_status === 0) {
-          console.log('Message sent successfully. Message ID:', pdu.message_id);
+          console.log(`Message sent successfully to ${destination}. Message ID:`, pdu.message_id);
           resolve(pdu.message_id);
         } else {
-          reject(new Error(`Failed to send message. Status: ${pdu.command_status}`));
+          reject(new Error(`Failed to send message to ${destination}. Status: ${pdu.command_status}`));
         }
       });
     });
