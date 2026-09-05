@@ -19,6 +19,14 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
+
+app.get('/api/status', (req, res) => {
+  res.json({
+    smpp_connected: smppClient.connected,
+    smpp_last_error: smppClient.lastError || null
+  });
+});
+
 app.get('/api/config', (req, res) => {
   res.json(config);
 });
@@ -56,6 +64,7 @@ async function fetchMelroseStats() {
     const response = await fetch(config.melrose.api_url, {
       headers: {
         'Authorization': `Bearer ${config.melrose.api_key}`,
+        'x-api-key': config.melrose.api_key,
         'Accept': 'application/json'
       }
     });
@@ -89,8 +98,14 @@ async function sendAlert(profile, reason) {
 }
 
 async function checkAndAlert(stats) {
-  const deliveryRate = stats.delivery_rate;
-  const pendingMessages = stats.pending_messages || 0;
+  // Try to find delivery_rate and pending_messages in common JSON structures
+  let deliveryRate = stats.delivery_rate ?? stats.deliveryRate ?? (stats.data && stats.data.delivery_rate);
+  let pendingMessages = stats.pending_messages ?? stats.pendingMessages ?? (stats.data && stats.data.pending_messages) ?? 0;
+  
+  if (deliveryRate === undefined && stats.delivered && stats.total) {
+      deliveryRate = (stats.delivered / stats.total) * 100;
+  }
+
 
   console.log(`Stats - Delivery Rate: ${deliveryRate}%, Pending: ${pendingMessages}`);
 

@@ -5,6 +5,7 @@ class SmppClient {
     this.config = config;
     this.session = null;
     this.connected = false;
+    this.lastError = null;
   }
 
   connect() {
@@ -25,9 +26,11 @@ class SmppClient {
           if (pdu.command_status === 0) {
             console.log('Successfully bound to SMPP server');
             this.connected = true;
+            this.lastError = null;
             resolve();
           } else {
             const err = new Error(`Failed to bind. Status: ${pdu.command_status}`);
+            this.lastError = err.message;
             console.error(err.message);
             reject(err);
           }
@@ -36,12 +39,15 @@ class SmppClient {
 
       this.session.on('error', (error) => {
         console.error('SMPP Session error:', error.message);
+        this.lastError = error.message;
         this.connected = false;
+    this.lastError = null;
       });
 
       this.session.on('close', () => {
         console.log('SMPP Session closed');
         this.connected = false;
+    this.lastError = null;
       });
     });
   }
@@ -59,6 +65,7 @@ class SmppClient {
       }
       this.session = null;
       this.connected = false;
+    this.lastError = null;
     }
   }
 
