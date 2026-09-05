@@ -71,6 +71,7 @@ app.get('/api/config', (req, res) => {
 });
 
 
+
 app.post('/api/test-alert', async (req, res) => {
     try {
         const { destination } = req.body;
@@ -79,13 +80,51 @@ app.post('/api/test-alert', async (req, res) => {
         }
         
         console.log(`Manual test alert requested for ${destination}`);
-        const testReason = "Test Alert from Web UI";
-        const dummyStats = { delivery_rate: 100, pending_messages: 0, _note: "This is a test alert" };
         
-        await smppClient.sendSMS(destination, `URGENT (Melrose): ${testReason}`);
-        logAlertHistory(destination, testReason, dummyStats);
+        // 1. Make the real API call
+        let stats = {};
+        if (config.melrose && config.melrose.api_url) {
+            try {
+                const response = await fetch(config.melrose.api_url, {
+                    headers: {
+                        'Authorization': `Bearer ${config.melrose.api_key}`,
+                        'x-api-key': config.melrose.api_key,
+                        'Accept': 'application/json'
+                    }
+                });
+                if (response.ok) {
+                    stats = await response.json();
+                } else {
+                    stats = { _error: `API returned ${response.status}` };
+                }
+            } catch (apiErr) {
+                stats = { _error: `API fetch failed: ${apiErr.message}` };
+            }
+        } else {
+            stats = { _error: "Melrose API URL not configured" };
+        }
+
+        // 2. Parse stats
+        let deliveryRate = stats.delivery_rate ?? stats.deliveryRate ?? (stats.data && stats.data.delivery_rate);
+        let pendingMessages = stats.pending_messages ?? stats.pendingMessages ?? (stats.data && stats.data.pending_messages);
         
-        res.json({ success: true, message: "Test alert sent successfully" });
+        if (deliveryRate === undefined && stats.delivered && stats.total) {
+            deliveryRate = ((stats.delivered / stats.total) * 100).toFixed(1);
+        }
+
+        const drText = deliveryRate !== undefined ? deliveryRate + '%' : 'N/A';
+        const pendText = pendingMessages !== undefined ? pendingMessages : 'N/A';
+        
+        const testReason = `Test Alert from Web UI`;
+        const smsBody = `URGENT (Melrose): Test Alert. Current Stats -> Delivery Rate: ${drText}, Pending: ${pendText}`;
+        
+        // 3. Send SMS
+        await smppClient.sendSMS(destination, smsBody);
+        
+        // 4. Log to history
+        logAlertHistory(destination, testReason, stats);
+        
+        res.json({ success: true, message: "Test alert sent successfully with real stats" });
     } catch (e) {
         console.error("Test alert failed:", e);
         res.status(500).json({ error: e.message || "Failed to send test alert" });
