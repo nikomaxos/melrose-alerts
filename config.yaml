@@ -1,0 +1,16 @@
+melrose:
+  api_url: "http://localhost:8080/v1/stats"
+  api_key: "your-api-key"
+  polling_interval_seconds: 5
+
+alerting:
+  delivery_rate_threshold_percent: 85
+  alert_cooldown_minutes: 15
+
+smpp:
+  host: "smpp.provider.com"
+  port: 2775
+  username: "your_username"
+  password: "your_password"
+  source_address: "MELROSE_ALT"
+  destination_number: "306900000000"
