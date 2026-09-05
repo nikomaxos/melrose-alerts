@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  melrose-alerts:
+    build: .
+    container_name: melrose-alerts
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount config so changes persist container restarts
+      - ./config.yaml:/usr/src/app/config.yaml

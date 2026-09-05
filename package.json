@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "smpp": "^0.6.0-rc.4",
     "yaml": "^2.9.0"
   }

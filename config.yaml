@@ -5,6 +5,8 @@ melrose:
 
 alerting:
   delivery_rate_threshold_percent: 85
+  pending_messages_threshold: 1000
+  pending_messages_duration_seconds: 60
   alert_cooldown_minutes: 15
 
 smpp:
