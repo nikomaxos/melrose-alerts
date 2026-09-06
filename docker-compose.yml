@@ -9,6 +9,8 @@ services:
     volumes:
     - ./config.yaml:/usr/src/app/config.yaml
     - ./alerts_history.json:/usr/src/app/alerts_history.json
+    - ./vapid_keys.json:/usr/src/app/vapid_keys.json
+    - ./subscriptions.json:/usr/src/app/subscriptions.json
   caddy:
     image: caddy:latest
     container_name: caddy
