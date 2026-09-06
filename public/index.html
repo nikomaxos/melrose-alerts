@@ -148,6 +148,20 @@
                     <input type="number" id="dur_${index}" value="${p.pending_messages_duration_seconds || 60}" required>
                 </div>
             </div>
+            
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                <strong>Channels for this Profile:</strong>
+                <div style="display: flex; gap: 20px; margin-top: 10px; align-items: center;">
+                    <label style="display: flex; align-items: center; gap: 5px; font-weight: normal; cursor: pointer;">
+                        <input type="checkbox" id="sms_${index}" ${p.enable_sms !== false ? 'checked' : ''}> Send SMS
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px; font-weight: normal; cursor: pointer;">
+                        <input type="checkbox" id="push_${index}" ${p.enable_push !== false ? 'checked' : ''}> Send Web Push
+                    </label>
+                    <div style="flex: 1;"></div>
+                    <button type="button" class="btn btn-secondary" onclick="registerPush(document.getElementById('dest_${index}').value)" style="background-color: #28a745;">📱 Register Device for Push</button>
+                </div>
+            </div>
         </div>`;
     }
 
