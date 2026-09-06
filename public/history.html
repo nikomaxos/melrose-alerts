@@ -48,12 +48,13 @@
                     <th>Timestamp</th>
                     <th>Destination Number</th>
                     <th>Trigger Reason</th>
+                    <th>Key Metrics</th>
                     <th>Raw Stats</th>
                 </tr>
             </thead>
             <tbody id="historyTableBody">
                 <tr>
-                    <td colspan="4" class="empty-msg">Loading history...</td>
+                    <td colspan="5" class="empty-msg">Loading history...</td>
                 </tr>
             </tbody>
         </table>
@@ -87,7 +88,7 @@
             const tbody = document.getElementById('historyTableBody');
             
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">No alerts have been sent yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">No alerts have been sent yet.</td></tr>';
                 return;
             }
 
@@ -99,11 +100,33 @@
                 const hasStats = !!alert.stats;
                 const formattedJson = hasStats ? JSON.stringify(alert.stats, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
                 
+                // Parse key metrics from stats
+                let metricsHtml = '<span style="color: #999;">N/A</span>';
+                if (hasStats) {
+                    const s = alert.stats;
+                    if (s._error) {
+                        metricsHtml = `<span style="color: #dc3545; font-weight: 500;">Error: ${s._error}</span>`;
+                    } else {
+                        let dr = s.delivery_rate ?? s.deliveryRate ?? (s.data && s.data.delivery_rate);
+                        if (dr === undefined && s.delivered && s.total) dr = ((s.delivered / s.total) * 100).toFixed(1);
+                        let pend = s.pending_messages ?? s.pendingMessages ?? (s.data && s.data.pending_messages);
+                        let parts = [];
+                        if (dr !== undefined) parts.push(`<strong>DLR:</strong> ${dr}%`);
+                        if (pend !== undefined) parts.push(`<strong>Pending:</strong> ${pend}`);
+                        if (parts.length > 0) {
+                            metricsHtml = parts.join(' | ');
+                        } else {
+                            metricsHtml = '<span style="color: #666; font-size: 0.9em;">(No metric fields found)</span>';
+                        }
+                    }
+                }
+                
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="white-space: nowrap;">${formatDate(alert.timestamp)}</td>
                     <td><strong>${alert.destination_number}</strong></td>
                     <td style="color: #dc3545;">${alert.reason}</td>
+                    <td>${metricsHtml}</td>
                     <td>
                         ${hasStats ? `<button class="stats-btn" onclick="toggleRow('${rowId}')">👁️ View Data</button>` : '<span class="stats-badge">N/A</span>'}
                     </td>
@@ -115,7 +138,7 @@
                     trExpanded.id = rowId;
                     trExpanded.className = 'expanded-row';
                     trExpanded.innerHTML = `
-                        <td colspan="4">
+                        <td colspan="5">
                             <strong>Raw API Response:</strong>
                             <pre class="json-pre">${formattedJson}</pre>
                         </td>
