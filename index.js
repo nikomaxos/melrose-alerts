@@ -2,6 +2,32 @@ const fs = require('fs');
 const YAML = require('yaml');
 const express = require('express');
 const SmppClient = require('./smppClient');
+const webpush = require('web-push');
+
+// VAPID keys setup
+const VAPID_KEYS_FILE = './vapid_keys.json';
+let vapidKeys = {};
+if (fs.existsSync(VAPID_KEYS_FILE)) {
+    vapidKeys = JSON.parse(fs.readFileSync(VAPID_KEYS_FILE, 'utf8'));
+} else {
+    vapidKeys = webpush.generateVAPIDKeys();
+    fs.writeFileSync(VAPID_KEYS_FILE, JSON.stringify(vapidKeys));
+}
+webpush.setVapidDetails('mailto:support@globalnetservices.net', vapidKeys.publicKey, vapidKeys.privateKey);
+
+// Subscriptions storage
+const SUBS_FILE = './subscriptions.json';
+let subscriptions = {};
+if (fs.existsSync(SUBS_FILE)) {
+    try {
+        subscriptions = JSON.parse(fs.readFileSync(SUBS_FILE, 'utf8'));
+    } catch (e) {
+        subscriptions = {};
+    }
+}
+function saveSubscriptions() {
+    fs.writeFileSync(SUBS_FILE, JSON.stringify(subscriptions, null, 2));
+}
 
 let config = YAML.parse(fs.readFileSync('./config.yaml', 'utf8'));
 let smppClient = new SmppClient(config.smpp);
